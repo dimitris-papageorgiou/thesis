@@ -1,0 +1,249 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model  import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
+
+from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
+from sklearn.metrics.cluster import adjusted_rand_score
+from sklearn.metrics import silhouette_score
+from scipy.cluster.hierarchy import dendrogram
+
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_validate
+from sklearn.metrics import classification_report
+
+
+init_df = pd.read_excel("FTIR_OLIVE_OILS.xlsx")
+targets_df = pd.read_excel("target.xlsx")
+targets_df
+#init_df
+
+
+df = init_df.sort_values(by='m/z')
+df = df.set_index('m/z')
+df = df.transpose()
+idx = df.index
+df
+
+figure, axis = plt.subplots(4, 5, figsize=(25,10))
+for i in range(len(df.index)):
+  axis[i // 5, i % 5].plot(df.columns, df.iloc[i])
+  axis[i // 5, i % 5].set_title(df.index[i])
+figure.tight_layout(pad=2)
+plt.show()
+
+
+start_df = df.transpose()
+start_df.iloc[:,:5].plot()
+
+
+start_df = df.transpose()
+start_df.iloc[:,10:15].plot()
+
+
+reduced_df = pd.DataFrame() #binning
+b = 40
+for i in range(400, 4000, b):
+  ds = pd.Series(np.zeros(20), index=df.index)
+  for j in range(b):
+    ds = ds + df[i + j]
+  reduced_df[i] = ds / b
+reduced_df
+
+
+figure, axis = plt.subplots(4, 5, figsize=(25,10)) #plot after the binning
+for i in range(len(reduced_df.index)):
+  axis[i // 5, i % 5].plot(reduced_df.columns, reduced_df.iloc[i])
+  axis[i // 5, i % 5].set_title(reduced_df.index[i])
+figure.tight_layout(pad=2)
+plt.show()
+
+
+binning_df = reduced_df.transpose()
+binning_df.iloc[:,:5].plot()
+
+
+binning_df = reduced_df.transpose()
+binning_df.iloc[:,10:15].plot()
+
+
+pca = PCA(n_components=20) #σμικρινση ποσοτητας δεδομένων με χρηση αλγοριθμου PCA
+pca.fit(df)
+pca_df = pd.DataFrame(pca.transform(df))
+pca_df = pca_df.set_index(idx)
+pca_df
+
+pca_df = pca_df.transpose()
+pca_df.iloc[:,:5].plot()
+
+
+# X = df # X = είναι με εισοδο τα αρχικα δεδομενα
+X = reduced_df # X = είναι με εισοδο τα επεξεργασμενα δεδομενα μετα το binning
+#X = pca_df # X = είναι με εισοδο τα επεξεργασμενα δεδομενα απο τον PCA
+y = targets_df['target']
+
+#split method
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+#apply all the algorithm
+lda = LDA()
+dt = DecisionTreeClassifier()
+lr = LogisticRegression()
+nb = GaussianNB()
+svm = SVC()
+rf = RandomForestClassifier()
+
+
+
+lda.fit(X_train, y_train)
+y_pred = lda.predict(X_test) # X_test = binning
+print(classification_report(y_test, y_pred))
+
+dt.fit(X_train, y_train)
+y_pred = dt.predict(X_test) # X_test = binning
+print(classification_report(y_test, y_pred))
+
+
+lr.fit(X_train, y_train)
+y_pred = lr.predict(X_test) # X_test = binning
+print(classification_report(y_test, y_pred))
+
+
+nb.fit(X_train, y_train)
+y_pred = nb.predict(X_test) # X_test = binning
+print(classification_report(y_test, y_pred))
+
+
+svm.fit(X_train, y_train)
+y_pred = svm.predict(X_test) # X_test = binning
+print(classification_report(y_test, y_pred))
+
+rf.fit(X_train, y_train)
+y_pred = rf.predict(X_test) # X_test = binning
+print(classification_report(y_test, y_pred))
+
+
+
+# X = df # X = είναι με εισοδο τα αρχικα δεδομενα
+#X = reduced_df # X = είναι με εισοδο τα επεξεργασμενα δεδομενα μετα το binning
+X = pca_df # X = είναι με εισοδο τα επεξεργασμενα δεδομενα απο τον PCA
+y = targets_df['target']
+
+#split method
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+
+k = 6
+cl_metrics = ('precision_weighted', 'recall_weighted', 'f1_weighted', 'accuracy')
+
+
+#start cross-validation method
+cv_results = cross_validate(lda, X, y, cv=k, scoring=cl_metrics) # X = binning
+results_df = pd.DataFrame(data={
+    'precision_weighted': cv_results['test_precision_weighted'],
+    'recall_weighted': cv_results['test_recall_weighted'],
+    'f1-score_weighted': cv_results['test_f1_weighted'],
+    'accuracy': cv_results['test_accuracy'],
+    })
+results_df
+
+
+
+cv_results = cross_validate(dt, X, y, cv=k, scoring=cl_metrics)
+results_df = pd.DataFrame(data={
+    'precision_weighted': cv_results['test_precision_weighted'], # X = PCA
+    'recall_weighted': cv_results['test_recall_weighted'],
+    'f1-score_weighted': cv_results['test_f1_weighted'],
+    'accuracy': cv_results['test_accuracy'],
+    })
+results_df
+
+
+cv_results = cross_validate(lr, X, y, cv=k, scoring=cl_metrics)
+results_df = pd.DataFrame(data={
+    'precision_weighted': cv_results['test_precision_weighted'], # X = PCA
+    'recall_weighted': cv_results['test_recall_weighted'],
+    'f1-score_weighted': cv_results['test_f1_weighted'],
+    'accuracy': cv_results['test_accuracy'],
+    })
+results_df
+
+
+cv_results = cross_validate(nb, X, y, cv=k, scoring=cl_metrics)
+results_df = pd.DataFrame(data={
+    'precision_weighted': cv_results['test_precision_weighted'], # X = Binning
+    'recall_weighted': cv_results['test_recall_weighted'],
+    'f1-score_weighted': cv_results['test_f1_weighted'],
+    'accuracy': cv_results['test_accuracy'],
+    })
+results_df
+
+
+cv_results = cross_validate(svm, X, y, cv=k, scoring=cl_metrics)
+results_df = pd.DataFrame(data={
+    'precision_weighted': cv_results['test_precision_weighted'], # X = binning
+    'recall_weighted': cv_results['test_recall_weighted'],
+    'f1-score_weighted': cv_results['test_f1_weighted'],
+    'accuracy': cv_results['test_accuracy'],
+    })
+results_df
+
+
+
+cv_results = cross_validate(rf, X, y, cv=k, scoring=cl_metrics)
+results_df = pd.DataFrame(data={
+    'precision_weighted': cv_results['test_precision_weighted'], # X = binning
+    'recall_weighted': cv_results['test_recall_weighted'],
+    'f1-score_weighted': cv_results['test_f1_weighted'],
+    'accuracy': cv_results['test_accuracy'],
+    })
+results_df
+
+
+
+
+clusters_df = targets_df
+
+kmeans = KMeans(n_clusters=2)
+clusters_df['kmeans'] = kmeans.fit_predict(X)
+
+agglomerative = AgglomerativeClustering(n_clusters=2, linkage='average')
+clusters_df['agglomerative'] = agglomerative.fit_predict(X)
+
+dbscan = DBSCAN(min_samples=3, eps=1.1)
+clusters_df['dbscan'] = dbscan.fit_predict(X)
+
+print(clusters_df)
+
+
+
+
+def plot_dendrogram(model, **kwargs):
+    counts = np.zeros(model.children_.shape[0])
+    n_samples = len(model.labels_)
+    for i, merge in enumerate(model.children_):
+        current_count = 0
+        for child_idx in merge:
+            if child_idx < n_samples:
+                current_count += 1  # leaf node
+            else:
+                current_count += counts[child_idx - n_samples]
+        counts[i] = current_count
+    linkage_matrix = np.column_stack([model.children_, model.distances_, counts]).astype(float)
+    dendrogram(linkage_matrix, **kwargs)
+
+
+hierarchy = AgglomerativeClustering(distance_threshold=0, n_clusters=None, linkage='average')
+hierarchy.fit(X)
+plt.title('Hierarchical Clustering Dendrogram')
+plot_dendrogram(hierarchy, truncate_mode='level', p=5)
+plt.xlabel('Indexes of points')
+plt.show()
